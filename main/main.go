@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/Syfaro/telegram-bot-api"
+	gt "github.com/bas24/googletranslatefree"
 	"log"
 	"net/http"
 	"reflect"
@@ -12,7 +12,6 @@ import (
 )
 
 const UrlExamples = "https://context.reverso.net/translation/"
-const UrlTranslation = "https://www.reverso.net/text-translation/"
 const TOKEN = "5436943485:AAG1Bnft74nScMPUXEJlCkKHSNsFPnBOtdE"
 
 func main() {
@@ -36,18 +35,14 @@ func main() {
 					msg := tgbotapi.NewMessage(message.Chat.ID, "Привіт Саша \n Надіюсь в тебе все добре")
 					telebot.Send(msg)
 				}
-				println(message.Chat.UserName)
 				msg := tgbotapi.NewMessage(message.Chat.ID, text)
 				telebot.Send(msg)
 			default:
 				textToTranslate := getWords(message.Text)
 				doc := getPage(UrlExamples, "russian-english/"+textToTranslate)
-
-				examples := examples(doc.Find("#examples-content .example"))
-				doc = getPage(UrlTranslation, "#sl=rus&tl=eng&text="+message.Text)
-				//translatedText := dumpTranslation(doc.Find(".translation-inputs").Find("textarea").Eq(1))
-				//fmt.Println(doc.Find("textarea").Html())
-				msg := tgbotapi.NewMessage(message.Chat.ID, examples)
+				examplesWord := examples(doc.Find("#examples-content .example"))
+				translatedText := getTranslate(textToTranslate, "ru", "en")
+				msg := tgbotapi.NewMessage(message.Chat.ID, translatedText+examplesWord)
 
 				telebot.Send(msg)
 			}
@@ -56,10 +51,9 @@ func main() {
 	}
 }
 
-func dumpTranslation(s *goquery.Selection) string {
-	text := "Перекладений текст: \n"
-	text += s.Find(".trg .ltr .text").Text()
-	return text
+func getTranslate(text, fromLang, toLang string) string {
+	result, _ := gt.Translate(text, fromLang, toLang)
+	return SimpleTranslate + DNL + result + DNL
 }
 
 func examples(s *goquery.Selection) string {
@@ -69,8 +63,11 @@ func examples(s *goquery.Selection) string {
 	}
 	for i := 0; i < s.Size() && i < 3; i++ {
 		example := s.Eq(i).Children().Find(".text")
-		text += "\nПриклад №" + strconv.Itoa(i+1) + "\n\n" + strings.TrimSpace(example.Eq(0).Text()) + "\n ---- > \n"
-		text += strings.TrimSpace(example.Eq(1).Text()) + "\n"
+
+		text += NL + ExampleNumber + strconv.Itoa(i+1) + DNL +
+			strings.TrimSpace(example.Eq(0).Text()) +
+			NL + Brackets + NL
+		text += strings.TrimSpace(example.Eq(1).Text()) + NL
 	}
 	return strings.TrimSpace(text)
 }
@@ -85,15 +82,12 @@ func getPage(url, text string) *goquery.Document {
 	client := &http.Client{}
 	reqUrl := url + text
 	req, err := http.NewRequest("GET", reqUrl, nil)
-	fmt.Println(req.RequestURI)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	//req.Header.Set("User-Agent", "Golang_Spider_Bot/3.0")
 	req.Header.Set("User-Agent", "Mozialla -1.0")
 	resp, err := client.Do(req)
 	defer resp.Body.Close()
-	//fmt.Println(ioutil.ReadAll(req.Body))
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	return doc
 }
